@@ -1,17 +1,14 @@
 mod config;
 mod models;
 
-use actix_web::{web, App, HttpServer, HttpResponse, middleware::Logger};
+use actix_web::{App, HttpResponse, HttpServer, middleware::Logger, web};
 use log::{error, info};
 
-// Import the ipapi functions
 use ipapi::{query_ip, query_own_ip};
 
-// Import our separated modules
 use config::Config;
 use models::*;
 
-// Convert ipapi types to our response types
 fn convert_ip_info(ip_info: ipapi::IPInfo) -> IPInfoResponse {
     IPInfoResponse {
         ip: ip_info.ip,
@@ -51,14 +48,12 @@ async fn health_check() -> HttpResponse {
         environment: std::env::var("RUST_ENV").unwrap_or_else(|_| "unknown".to_string()),
         timestamp,
     };
-    
+
     HttpResponse::Ok().json(response)
 }
 
 // Get IP information
-async fn get_ip_info(
-    web::Query(params): web::Query<QueryParams>,
-) -> HttpResponse {
+async fn get_ip_info(web::Query(params): web::Query<QueryParams>) -> HttpResponse {
     let ip_address = match params.ip {
         Some(ip) => {
             if ip.is_empty() {
@@ -70,12 +65,12 @@ async fn get_ip_info(
                 });
             }
             ip
-        },
+        }
         None => "8.8.8.8".to_string(), // Default fallback
     };
-    
+
     info!("Querying IP information for: {}", ip_address);
-    
+
     match query_ip(&ip_address).await {
         Ok(ip_info) => {
             let converted_info = convert_ip_info(ip_info);
@@ -85,7 +80,7 @@ async fn get_ip_info(
                 error: None,
                 message: "IP information retrieved successfully".to_string(),
             })
-        },
+        }
         Err(e) => {
             error!("Failed to query IP: {}", e);
             HttpResponse::InternalServerError().json(ApiResponse::<String> {
@@ -101,14 +96,12 @@ async fn get_ip_info(
 // Get own IP address
 async fn get_own_ip() -> HttpResponse {
     match query_own_ip().await {
-        Ok(ip) => {
-            HttpResponse::Ok().json(ApiResponse {
-                success: true,
-                data: Some(ip),
-                error: None,
-                message: "Your public IP address retrieved successfully".to_string(),
-            })
-        },
+        Ok(ip) => HttpResponse::Ok().json(ApiResponse {
+            success: true,
+            data: Some(ip),
+            error: None,
+            message: "Your public IP address retrieved successfully".to_string(),
+        }),
         Err(e) => {
             error!("Failed to get own IP: {}", e);
             HttpResponse::InternalServerError().json(ApiResponse::<String> {
@@ -125,28 +118,29 @@ async fn get_own_ip() -> HttpResponse {
 async fn main() -> std::io::Result<()> {
     // Load configuration from .env
     let config = Config::from_env().expect("Failed to load configuration");
-    
+
     // Initialize logger based on config.log_level
     env_logger::Builder::from_default_env()
-        .filter_level(
-            match config.log_level.as_str() {
-                "debug" => log::LevelFilter::Debug,
-                "info" => log::LevelFilter::Info,
-                "warn" => log::LevelFilter::Warn,
-                "error" => log::LevelFilter::Error,
-                _ => log::LevelFilter::Info,
-            }
-        )
+        .filter_level(match config.log_level.as_str() {
+            "debug" => log::LevelFilter::Debug,
+            "info" => log::LevelFilter::Info,
+            "warn" => log::LevelFilter::Warn,
+            "error" => log::LevelFilter::Error,
+            _ => log::LevelFilter::Info,
+        })
         .init();
-    
+
     info!("Starting IP API Server...");
     info!("Environment: {}", config.rust_env);
-    info!("Server will run on: {}:{}", config.server_host, config.server_port);
-    
+    info!(
+        "Server will run on: {}:{}",
+        config.server_host, config.server_port
+    );
+
     // Clone config variables to move into the HttpServer closure
     let server_host = config.server_host.clone();
     let server_port = config.server_port;
-    
+
     // Start HTTP server
     HttpServer::new(|| {
         App::new()
